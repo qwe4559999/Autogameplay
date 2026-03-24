@@ -4,7 +4,8 @@ import subprocess
 from datetime import datetime
 
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QSpinBox
+    QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QSpinBox,
+    QScrollArea, QFrame, QLabel
 )
 from PyQt6.QtCore import Qt
 
@@ -39,36 +40,16 @@ class GamePage(QWidget):
         is_maaend = self._plugin.plugin_id == "maaend_endfield"
 
         if is_maaend:
-            hero_card = CardWidget()
-            hero_card.setStyleSheet(
-                "CardWidget {"
-                "background:qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #f4fbff, stop:1 #eef8f3);"
-                "border:1px solid rgba(0,140,140,0.16);"
-                "border-radius:18px;"
-                "}"
-            )
-            hero_layout = QVBoxLayout(hero_card)
-            hero_layout.setContentsMargins(22, 18, 22, 18)
-            hero_layout.setSpacing(6)
-
-            title = SubtitleLabel("终末地自动接管")
-            title.setStyleSheet("font-size: 20px; font-weight: 700;")
-            hero_layout.addWidget(title)
-
-            subtitle = CaptionLabel(
-                "统一拉起游戏与 MaaEnd，检测到终末地在运行后会主动补发一次开始任务指令。"
-            )
-            subtitle.setTextColor("#356f6f", "#9bd1d1")
-            hero_layout.addWidget(subtitle)
-            layout.addWidget(hero_card)
+            self._build_maaend_ui(layout)
         else:
-            title = SubtitleLabel(self._plugin.display_name)
-            layout.addWidget(title)
+            self._build_standard_ui(layout)
+
+    def _build_standard_ui(self, layout: QVBoxLayout):
+        title = SubtitleLabel(self._plugin.display_name)
+        layout.addWidget(title)
 
         # Install path config card
         path_card = CardWidget()
-        if is_maaend:
-            path_card.setStyleSheet("CardWidget { border-radius:16px; }")
         path_layout = QHBoxLayout(path_card)
         path_layout.setContentsMargins(16, 12, 16, 12)
 
@@ -92,57 +73,346 @@ class GamePage(QWidget):
 
         self.game_path_edit = None
         self.game_delay_spin = None
-        if self._plugin.plugin_id == "maaend_endfield":
-            game_card = CardWidget()
-            game_card.setStyleSheet("CardWidget { border-radius:16px; }")
-            game_layout = QVBoxLayout(game_card)
-            game_layout.setContentsMargins(16, 12, 16, 12)
-            game_layout.setSpacing(10)
+        self._add_standard_game_controls(layout)
 
-            helper = CaptionLabel("终末地运行后，MaaEnd 会优先尝试自动开跑；若失败则补发开始任务热键。")
-            helper.setTextColor("#5d7d7d", "#88b8b8")
-            game_layout.addWidget(helper)
+    def _build_maaend_ui(self, layout: QVBoxLayout):
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        layout.addWidget(scroll, 1)
 
-            path_row = QHBoxLayout()
-            path_row.addWidget(BodyLabel("游戏路径:"))
-            self.game_path_edit = LineEdit()
-            self.game_path_edit.setPlaceholderText("选择游戏快捷方式或可执行文件...")
-            self.game_path_edit.setText(self._plugin.get_game_path())
-            path_row.addWidget(self.game_path_edit, 1)
+        content = QWidget()
+        scroll.setWidget(content)
 
-            game_browse_btn = ToolButton(FluentIcon.FOLDER)
-            game_browse_btn.clicked.connect(self._on_browse_game)
-            path_row.addWidget(game_browse_btn)
-            game_layout.addLayout(path_row)
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(16)
 
-            delay_row = QHBoxLayout()
-            delay_row.addWidget(BodyLabel("启动等待:"))
-            self.game_delay_spin = QSpinBox()
-            self.game_delay_spin.setRange(0, 600)
-            self.game_delay_spin.setSuffix(" 秒")
-            self.game_delay_spin.setValue(self._plugin.get_game_start_delay())
-            delay_row.addWidget(self.game_delay_spin)
-            delay_row.addStretch()
-            game_layout.addLayout(delay_row)
+        hero_card = CardWidget()
+        hero_card.setObjectName("maaendHeroCard")
+        hero_card.setStyleSheet(
+            "#maaendHeroCard {"
+            "background:qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #f2fbff, stop:0.55 #f7fbf6, stop:1 #eef7ff);"
+            "border:1px solid rgba(15, 120, 140, 0.14);"
+            "border-radius:20px;"
+            "}"
+        )
+        hero_layout = QVBoxLayout(hero_card)
+        hero_layout.setContentsMargins(24, 20, 24, 20)
+        hero_layout.setSpacing(10)
 
-            layout.addWidget(game_card)
+        title = SubtitleLabel("明日方舟:终末地自动接管")
+        title.setStyleSheet("font-size: 22px; font-weight: 700;")
+        hero_layout.addWidget(title)
 
+        subtitle = CaptionLabel(
+            "统一启动游戏与 MaaEnd，先拉起终末地，再等待状态稳定后触发任务执行。"
+        )
+        subtitle.setTextColor("#37656e", "#8fbac1")
+        hero_layout.addWidget(subtitle)
+
+        badge_row = QHBoxLayout()
+        badge_row.setSpacing(8)
+        for text, bg, fg in [
+            ("自动启动", "rgba(17, 131, 157, 0.12)", "#117f95"),
+            ("任务接管", "rgba(70, 134, 72, 0.12)", "#3e7d42"),
+            ("热键兜底", "rgba(110, 86, 186, 0.12)", "#6b57b2"),
+        ]:
+            badge_row.addWidget(self._make_badge(text, bg, fg))
+        badge_row.addStretch()
+        hero_layout.addLayout(badge_row)
+
+        content_layout.addWidget(hero_card)
+
+        summary_card = CardWidget()
+        summary_card.setObjectName("maaendSummaryCard")
+        summary_card.setStyleSheet(
+            "#maaendSummaryCard {"
+            "background: rgba(255, 255, 255, 0.92);"
+            "border:1px solid rgba(120, 140, 160, 0.14);"
+            "border-radius:18px;"
+            "}"
+        )
+        summary_layout = QVBoxLayout(summary_card)
+        summary_layout.setContentsMargins(18, 16, 18, 16)
+        summary_layout.setSpacing(10)
+
+        summary_title = BodyLabel("当前配置概览")
+        summary_title.setStyleSheet("font-size: 15px; font-weight: 600;")
+        summary_layout.addWidget(summary_title)
+
+        grid = QHBoxLayout()
+        grid.setSpacing(12)
+        self._maaend_summary_install = self._create_summary_block("安装路径", self._plugin.get_install_path())
+        self._maaend_summary_game = self._create_summary_block("游戏路径", self._plugin.get_game_path())
+        self._maaend_summary_delay = self._create_summary_block(
+            "启动等待", f"{self._plugin.get_game_start_delay()} 秒"
+        )
+        grid.addWidget(self._maaend_summary_install)
+        grid.addWidget(self._maaend_summary_game)
+        grid.addWidget(self._maaend_summary_delay)
+        summary_layout.addLayout(grid)
+
+        content_layout.addWidget(summary_card)
+
+        config_card = CardWidget()
+        config_card.setObjectName("maaendConfigCard")
+        config_card.setStyleSheet(
+            "#maaendConfigCard {"
+            "background: rgba(248, 251, 252, 0.96);"
+            "border:1px solid rgba(140, 150, 165, 0.16);"
+            "border-radius:18px;"
+            "}"
+        )
+        config_layout = QVBoxLayout(config_card)
+        config_layout.setContentsMargins(18, 16, 18, 16)
+        config_layout.setSpacing(12)
+
+        config_header = QHBoxLayout()
+        config_header.setSpacing(8)
+        header_label = BodyLabel("启动配置")
+        header_label.setStyleSheet("font-size: 15px; font-weight: 600;")
+        config_header.addWidget(header_label)
+        config_header.addStretch()
+        config_hint = CaptionLabel("修改后自动保存到本地配置")
+        config_hint.setTextColor("#7a7f87", "#9fa7b2")
+        config_header.addWidget(config_hint)
+        config_layout.addLayout(config_header)
+
+        install_row = QHBoxLayout()
+        install_row.setSpacing(12)
+        install_row.addWidget(BodyLabel("安装路径"))
+        self.path_edit = LineEdit()
+        self.path_edit.setPlaceholderText("选择 MaaEnd 安装目录...")
+        self.path_edit.setText(self._plugin.get_install_path())
+        install_row.addWidget(self.path_edit, 1)
+
+        browse_btn = ToolButton(FluentIcon.FOLDER)
+        browse_btn.clicked.connect(self._on_browse)
+        install_row.addWidget(browse_btn)
+
+        self.validate_btn = PushButton(FluentIcon.ACCEPT, "验证")
+        self.validate_btn.clicked.connect(self._on_validate)
+        install_row.addWidget(self.validate_btn)
+        config_layout.addLayout(install_row)
+
+        self.game_path_edit = LineEdit()
+        self.game_delay_spin = QSpinBox()
+
+        game_row = QHBoxLayout()
+        game_row.setSpacing(12)
+        game_row.addWidget(BodyLabel("游戏路径"))
+        self.game_path_edit.setPlaceholderText("选择终末地快捷方式或可执行文件...")
+        self.game_path_edit.setText(self._plugin.get_game_path())
+        game_row.addWidget(self.game_path_edit, 1)
+
+        game_browse_btn = ToolButton(FluentIcon.FOLDER)
+        game_browse_btn.clicked.connect(self._on_browse_game)
+        game_row.addWidget(game_browse_btn)
+        config_layout.addLayout(game_row)
+
+        delay_row = QHBoxLayout()
+        delay_row.setSpacing(12)
+        delay_row.addWidget(BodyLabel("启动等待"))
+        self.game_delay_spin.setRange(0, 600)
+        self.game_delay_spin.setSuffix(" 秒")
+        self.game_delay_spin.setValue(self._plugin.get_game_start_delay())
+        self.game_delay_spin.setFixedWidth(160)
+        delay_row.addWidget(self.game_delay_spin)
+        delay_row.addStretch()
+        delay_note = CaptionLabel("建议先等待终末地窗口稳定，再让 MaaEnd 接管。")
+        delay_note.setTextColor("#7a7f87", "#9fa7b2")
+        delay_row.addWidget(delay_note)
+        config_layout.addLayout(delay_row)
+
+        content_layout.addWidget(config_card)
+
+        guide_card = CardWidget()
+        guide_card.setObjectName("maaendGuideCard")
+        guide_card.setStyleSheet(
+            "#maaendGuideCard {"
+            "background: rgba(245, 248, 250, 0.96);"
+            "border:1px solid rgba(140, 150, 165, 0.14);"
+            "border-radius:18px;"
+            "}"
+        )
+        guide_layout = QVBoxLayout(guide_card)
+        guide_layout.setContentsMargins(18, 16, 18, 16)
+        guide_layout.setSpacing(8)
+
+        guide_title = BodyLabel("执行说明")
+        guide_title.setStyleSheet("font-size: 15px; font-weight: 600;")
+        guide_layout.addWidget(guide_title)
+
+        for text in [
+            "先启动终末地，再等待指定时间后让 MaaEnd 补发开始指令。",
+            "如果 MaaEnd 已经以管理员权限运行，不会重复弹出 UAC。",
+            "日志区会实时显示启动、等待、接管与关闭过程。",
+        ]:
+            guide_layout.addWidget(self._make_hint_line(text))
+
+        content_layout.addWidget(guide_card)
+
+        action_card = CardWidget()
+        action_card.setObjectName("maaendActionCard")
+        action_card.setStyleSheet(
+            "#maaendActionCard {"
+            "background: rgba(255, 255, 255, 0.96);"
+            "border:1px solid rgba(120, 140, 160, 0.14);"
+            "border-radius:18px;"
+            "}"
+        )
+        action_layout = QVBoxLayout(action_card)
+        action_layout.setContentsMargins(18, 16, 18, 16)
+        action_layout.setSpacing(10)
+
+        action_header = BodyLabel("操作")
+        action_header.setStyleSheet("font-size: 15px; font-weight: 600;")
+        action_layout.addWidget(action_header)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(12)
+
+        self.run_btn = PrimaryPushButton(FluentIcon.PLAY, "立即运行")
+        self.run_btn.clicked.connect(self._on_run)
+        self.run_btn.setMinimumHeight(44)
+        btn_layout.addWidget(self.run_btn)
+
+        self.stop_btn = PushButton(FluentIcon.CLOSE, "停止")
+        self.stop_btn.clicked.connect(self._on_stop)
+        self.stop_btn.setEnabled(False)
+        self.stop_btn.setMinimumHeight(44)
+        btn_layout.addWidget(self.stop_btn)
+
+        self.open_tool_btn = PushButton(FluentIcon.SETTING, "打开工具配置")
+        self.open_tool_btn.clicked.connect(self._on_open_tool)
+        self.open_tool_btn.setMinimumHeight(44)
+        btn_layout.addWidget(self.open_tool_btn)
+
+        btn_layout.addStretch()
+        action_layout.addLayout(btn_layout)
+        content_layout.addWidget(action_card)
+
+        log_card = CardWidget()
+        log_card.setObjectName("maaendLogCard")
+        log_card.setStyleSheet(
+            "#maaendLogCard {"
+            "background: rgba(255, 255, 255, 0.98);"
+            "border:1px solid rgba(120, 140, 160, 0.14);"
+            "border-radius:18px;"
+            "}"
+        )
+        log_layout = QVBoxLayout(log_card)
+        log_layout.setContentsMargins(18, 16, 18, 16)
+        log_layout.setSpacing(8)
+
+        log_header = QHBoxLayout()
+        log_header.setSpacing(8)
+        log_title = BodyLabel("运行日志")
+        log_title.setStyleSheet("font-size: 15px; font-weight: 600;")
+        log_header.addWidget(log_title)
+        log_header.addStretch()
+        log_hint = CaptionLabel("按时间顺序展示 MaaEnd 与终末地的关键状态")
+        log_hint.setTextColor("#7a7f87", "#9fa7b2")
+        log_header.addWidget(log_hint)
+        log_layout.addLayout(log_header)
+
+        self.log_text = TextEdit()
+        self.log_text.setReadOnly(True)
+        self.log_text.setPlaceholderText("任务运行后，日志会在这里滚动显示。")
+        self.log_text.setMinimumHeight(280)
+        self.log_text.setStyleSheet(
+            "background: #fbfcfd;"
+            "border: 1px solid rgba(120, 140, 160, 0.18);"
+            "border-radius: 14px;"
+            "font-family: 'Cascadia Code', 'Consolas', monospace;"
+            "font-size: 12px;"
+            "padding: 8px;"
+        )
+        log_layout.addWidget(self.log_text)
+
+        content_layout.addWidget(log_card)
+        content_layout.addStretch()
+
+        self._apply_maaend_page_style()
+
+    def _apply_maaend_page_style(self):
+        self.setStyleSheet(
+            "QLabel { color: #1f2933; }"
+            "CardWidget { border: none; }"
+        )
+
+    def _make_badge(self, text: str, background: str, color: str) -> QLabel:
+        badge = QLabel(text)
+        badge.setStyleSheet(
+            f"QLabel {{"
+            f"padding: 5px 12px;"
+            f"border-radius: 999px;"
+            f"background: {background};"
+            f"color: {color};"
+            f"font-weight: 600;"
+            f"}}"
+        )
+        return badge
+
+    def _create_summary_block(self, title: str, value: str) -> QWidget:
+        block = QWidget()
+        layout = QVBoxLayout(block)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(4)
+        block.setStyleSheet(
+            "QWidget {"
+            "background: rgba(245, 248, 250, 0.9);"
+            "border: 1px solid rgba(135, 145, 160, 0.12);"
+            "border-radius: 14px;"
+            "}"
+        )
+
+        title_label = CaptionLabel(title)
+        title_label.setTextColor("#6f7a86", "#97a3af")
+        layout.addWidget(title_label)
+
+        value_label = BodyLabel(value or "未配置")
+        value_label.setWordWrap(True)
+        value_label.setStyleSheet("font-size: 13px; font-weight: 600;")
+        layout.addWidget(value_label)
+
+        if title == "安装路径":
+            self._maaend_summary_install_value = value_label
+        elif title == "游戏路径":
+            self._maaend_summary_game_value = value_label
+        elif title == "启动等待":
+            self._maaend_summary_delay_value = value_label
+
+        return block
+
+    def _make_hint_line(self, text: str) -> QWidget:
+        row = QWidget()
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+
+        dot = QLabel("•")
+        dot.setStyleSheet("color: #6ca8b0; font-size: 18px;")
+        layout.addWidget(dot)
+
+        label = CaptionLabel(text)
+        label.setWordWrap(True)
+        label.setTextColor("#54606a", "#8fa0ad")
+        layout.addWidget(label, 1)
+        return row
+
+    def _add_standard_game_controls(self, layout: QVBoxLayout):
         # Info card
         info_card = CardWidget()
-        if is_maaend:
-            info_card.setStyleSheet(
-                "CardWidget { background: rgba(0, 128, 128, 0.04); border-radius:16px; }"
-            )
         info_layout = QVBoxLayout(info_card)
         info_layout.setContentsMargins(16, 12, 16, 12)
 
-        info_text = (
-            "任务配置请在各工具自带的 GUI 中完成。本平台负责启动、提权、监控和收尾。"
-            if is_maaend else
+        info_label = CaptionLabel(
             "任务配置请在各工具自带的 GUI 中完成。本平台仅负责启动、调度和监控。"
         )
-        info_label = CaptionLabel(info_text)
-        info_label.setTextColor("#6f6f6f", "#aaaaaa")
+        info_label.setTextColor("#888888", "#aaaaaa")
         info_layout.addWidget(info_label)
 
         layout.addWidget(info_card)
@@ -152,21 +422,15 @@ class GamePage(QWidget):
 
         self.run_btn = PrimaryPushButton(FluentIcon.PLAY, "立即运行")
         self.run_btn.clicked.connect(self._on_run)
-        if is_maaend:
-            self.run_btn.setMinimumHeight(42)
         btn_layout.addWidget(self.run_btn)
 
         self.stop_btn = PushButton(FluentIcon.CLOSE, "停止")
         self.stop_btn.clicked.connect(self._on_stop)
         self.stop_btn.setEnabled(False)
-        if is_maaend:
-            self.stop_btn.setMinimumHeight(42)
         btn_layout.addWidget(self.stop_btn)
 
         self.open_tool_btn = PushButton(FluentIcon.SETTING, "打开工具配置")
         self.open_tool_btn.clicked.connect(self._on_open_tool)
-        if is_maaend:
-            self.open_tool_btn.setMinimumHeight(42)
         btn_layout.addWidget(self.open_tool_btn)
 
         btn_layout.addStretch()
@@ -182,6 +446,14 @@ class GamePage(QWidget):
             "font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 12px;"
         )
         layout.addWidget(self.log_text, 1)
+
+    def _refresh_maaend_summary(self):
+        if hasattr(self, "_maaend_summary_install_value"):
+            self._maaend_summary_install_value.setText(self._plugin.get_install_path() or "未配置")
+        if hasattr(self, "_maaend_summary_game_value"):
+            self._maaend_summary_game_value.setText(self._plugin.get_game_path() or "未配置")
+        if hasattr(self, "_maaend_summary_delay_value"):
+            self._maaend_summary_delay_value.setText(f"{self._plugin.get_game_start_delay()} 秒")
 
     def _on_browse(self):
         path = QFileDialog.getExistingDirectory(self, "选择安装目录")
@@ -308,6 +580,7 @@ class GamePage(QWidget):
             self.game_path_edit.setText(self._plugin.get_game_path())
         if self.game_delay_spin is not None:
             self.game_delay_spin.setValue(self._plugin.get_game_start_delay())
+        self._refresh_maaend_summary()
 
     def on_task_started(self):
         self.run_btn.setEnabled(False)

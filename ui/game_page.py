@@ -36,12 +36,39 @@ class GamePage(QWidget):
         layout.setContentsMargins(36, 20, 36, 20)
         layout.setSpacing(16)
 
-        # Title
-        title = SubtitleLabel(self._plugin.display_name)
-        layout.addWidget(title)
+        is_maaend = self._plugin.plugin_id == "maaend_endfield"
+
+        if is_maaend:
+            hero_card = CardWidget()
+            hero_card.setStyleSheet(
+                "CardWidget {"
+                "background:qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #f4fbff, stop:1 #eef8f3);"
+                "border:1px solid rgba(0,140,140,0.16);"
+                "border-radius:18px;"
+                "}"
+            )
+            hero_layout = QVBoxLayout(hero_card)
+            hero_layout.setContentsMargins(22, 18, 22, 18)
+            hero_layout.setSpacing(6)
+
+            title = SubtitleLabel("终末地自动接管")
+            title.setStyleSheet("font-size: 20px; font-weight: 700;")
+            hero_layout.addWidget(title)
+
+            subtitle = CaptionLabel(
+                "统一拉起游戏与 MaaEnd，检测到终末地在运行后会主动补发一次开始任务指令。"
+            )
+            subtitle.setTextColor("#356f6f", "#9bd1d1")
+            hero_layout.addWidget(subtitle)
+            layout.addWidget(hero_card)
+        else:
+            title = SubtitleLabel(self._plugin.display_name)
+            layout.addWidget(title)
 
         # Install path config card
         path_card = CardWidget()
+        if is_maaend:
+            path_card.setStyleSheet("CardWidget { border-radius:16px; }")
         path_layout = QHBoxLayout(path_card)
         path_layout.setContentsMargins(16, 12, 16, 12)
 
@@ -67,8 +94,14 @@ class GamePage(QWidget):
         self.game_delay_spin = None
         if self._plugin.plugin_id == "maaend_endfield":
             game_card = CardWidget()
+            game_card.setStyleSheet("CardWidget { border-radius:16px; }")
             game_layout = QVBoxLayout(game_card)
             game_layout.setContentsMargins(16, 12, 16, 12)
+            game_layout.setSpacing(10)
+
+            helper = CaptionLabel("终末地运行后，MaaEnd 会优先尝试自动开跑；若失败则补发开始任务热键。")
+            helper.setTextColor("#5d7d7d", "#88b8b8")
+            game_layout.addWidget(helper)
 
             path_row = QHBoxLayout()
             path_row.addWidget(BodyLabel("游戏路径:"))
@@ -96,13 +129,20 @@ class GamePage(QWidget):
 
         # Info card
         info_card = CardWidget()
+        if is_maaend:
+            info_card.setStyleSheet(
+                "CardWidget { background: rgba(0, 128, 128, 0.04); border-radius:16px; }"
+            )
         info_layout = QVBoxLayout(info_card)
         info_layout.setContentsMargins(16, 12, 16, 12)
 
-        info_label = CaptionLabel(
+        info_text = (
+            "任务配置请在各工具自带的 GUI 中完成。本平台负责启动、提权、监控和收尾。"
+            if is_maaend else
             "任务配置请在各工具自带的 GUI 中完成。本平台仅负责启动、调度和监控。"
         )
-        info_label.setTextColor("#888888", "#aaaaaa")
+        info_label = CaptionLabel(info_text)
+        info_label.setTextColor("#6f6f6f", "#aaaaaa")
         info_layout.addWidget(info_label)
 
         layout.addWidget(info_card)
@@ -112,15 +152,21 @@ class GamePage(QWidget):
 
         self.run_btn = PrimaryPushButton(FluentIcon.PLAY, "立即运行")
         self.run_btn.clicked.connect(self._on_run)
+        if is_maaend:
+            self.run_btn.setMinimumHeight(42)
         btn_layout.addWidget(self.run_btn)
 
         self.stop_btn = PushButton(FluentIcon.CLOSE, "停止")
         self.stop_btn.clicked.connect(self._on_stop)
         self.stop_btn.setEnabled(False)
+        if is_maaend:
+            self.stop_btn.setMinimumHeight(42)
         btn_layout.addWidget(self.stop_btn)
 
         self.open_tool_btn = PushButton(FluentIcon.SETTING, "打开工具配置")
         self.open_tool_btn.clicked.connect(self._on_open_tool)
+        if is_maaend:
+            self.open_tool_btn.setMinimumHeight(42)
         btn_layout.addWidget(self.open_tool_btn)
 
         btn_layout.addStretch()
@@ -239,11 +285,14 @@ class GamePage(QWidget):
 
         try:
             if self._plugin.plugin_id == "maaend_endfield":
-                ret = ctypes.windll.shell32.ShellExecuteW(
-                    None, "runas", exe_path, None, install_path, 1
-                )
-                if ret <= 32:
-                    raise RuntimeError("MaaEnd 启动失败，可能是 UAC 被取消")
+                if ctypes.windll.shell32.IsUserAnAdmin():
+                    subprocess.Popen([exe_path], cwd=install_path)
+                else:
+                    ret = ctypes.windll.shell32.ShellExecuteW(
+                        None, "runas", exe_path, None, install_path, 1
+                    )
+                    if ret <= 32:
+                        raise RuntimeError("MaaEnd 启动失败，可能是 UAC 被取消")
             else:
                 subprocess.Popen([exe_path], cwd=install_path)
             InfoBar.info("已启动", f"已打开 {exe_name}，请在其中配置任务",

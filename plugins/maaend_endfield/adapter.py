@@ -77,12 +77,33 @@ class MaaEndEndfieldPlugin(GamePlugin):
             TaskDefinition("daily", "一键日常", "启动 MaaEnd 执行预配置的日常任务"),
         ]
 
+    def _is_admin(self) -> bool:
+        try:
+            return bool(ctypes.windll.shell32.IsUserAnAdmin())
+        except Exception:
+            return False
+
+    def _popen_kwargs(self) -> dict:
+        kwargs = {}
+        if os.name == "nt":
+            kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        return kwargs
+
+    def _run_command(self, args: list[str], **kwargs) -> subprocess.CompletedProcess:
+        options = {
+            "capture_output": True,
+            "text": True,
+            "timeout": 5,
+        }
+        options.update(self._popen_kwargs())
+        options.update(kwargs)
+        return subprocess.run(args, **options)
+
     def _find_process(self, name: str) -> Optional[int]:
         """Find a running process by image name, return PID or None."""
         try:
-            result = subprocess.run(
-                ["tasklist", "/FI", f"IMAGENAME eq {name}", "/FO", "CSV", "/NH"],
-                capture_output=True, text=True, timeout=5,
+            result = self._run_command(
+                ["tasklist", "/FI", f"IMAGENAME eq {name}", "/FO", "CSV", "/NH"]
             )
             for line in result.stdout.strip().splitlines():
                 parts = line.strip('"').split('","')
@@ -92,12 +113,93 @@ class MaaEndEndfieldPlugin(GamePlugin):
             pass
         return None
 
+    def _find_window_process(self, title: str) -> Optional[str]:
+        try:
+            result = self._run_command(
+                ["tasklist", "/FI", f"WINDOWTITLE eq {title}", "/FO", "CSV", "/NH"]
+            )
+            for line in result.stdout.strip().splitlines():
+                parts = line.strip('"').split('","')
+                if len(parts) >= 2 and parts[0] != "INFO:":
+                    return parts[0]
+        except Exception:
+            pass
+        return None
+
+    def _is_game_running(self) -> bool:
+        if self._find_window_process("Endfield"):
+            return True
+
+        game_path = self.get_game_path()
+        if game_path and game_path.lower().endswith(".exe"):
+            return self._find_process(os.path.basename(game_path)) is not None
+
+        return False
+
+    def _wait_for_game_running(self, timeout_seconds: int,
+                               callback: Callable[[str, str], None]) -> bool:
+        for _ in range(timeout_seconds):
+            if self._status == PluginStatus.STOPPED:
+                return False
+            if self._is_game_running():
+                return True
+            time.sleep(1)
+        callback("warning", "在等待时间内未检测到终末地运行，仍继续尝试启动 MaaEnd")
+        return False
+
     def _launch_elevated(self, exe_path: str, cwd: str) -> bool:
-        """Launch an exe with UAC elevation via ShellExecuteW."""
+        """Launch MaaEnd. If the hub is already elevated, avoid a second UAC prompt."""
+        if self._is_admin():
+            subprocess.Popen([exe_path], cwd=cwd, **self._popen_kwargs())
+            return True
+
         ret = ctypes.windll.shell32.ShellExecuteW(
             None, "runas", exe_path, None, cwd, 1  # SW_SHOWNORMAL
         )
         return ret > 32
+
+    def _get_start_hotkey(self, config_data: dict) -> str:
+        hotkeys = config_data.get("hotkeys") if isinstance(config_data, dict) else None
+        if isinstance(hotkeys, dict):
+            hotkey = hotkeys.get("startTasks")
+            if isinstance(hotkey, str) and hotkey.strip():
+                return hotkey.strip().upper()
+        return "F10"
+
+    def _send_hotkey(self, hotkey: str) -> bool:
+        vk_map = {
+            "CTRL": 0x11,
+            "SHIFT": 0x10,
+            "ALT": 0x12,
+        }
+        function_keys = {f"F{i}": 0x6F + i for i in range(1, 25)}
+
+        parts = [part.strip().upper() for part in hotkey.split("+") if part.strip()]
+        if not parts:
+            return False
+
+        target = parts[-1]
+        modifiers = parts[:-1]
+        vk = function_keys.get(target)
+        if vk is None and len(target) == 1:
+            vk = ctypes.windll.user32.VkKeyScanW(ord(target)) & 0xFF
+        if vk is None:
+            return False
+
+        user32 = ctypes.windll.user32
+        for modifier in modifiers:
+            mod_vk = vk_map.get(modifier)
+            if mod_vk is None:
+                return False
+            user32.keybd_event(mod_vk, 0, 0, 0)
+
+        user32.keybd_event(vk, 0, 0, 0)
+        user32.keybd_event(vk, 0, 0x0002, 0)
+
+        for modifier in reversed(modifiers):
+            mod_vk = vk_map[modifier]
+            user32.keybd_event(mod_vk, 0, 0x0002, 0)
+        return True
 
     def run_tasks(self, task_ids: list[str], callback: Callable[[str, str], None]) -> TaskResult:
         start_time = datetime.now().isoformat()
@@ -121,12 +223,14 @@ class MaaEndEndfieldPlugin(GamePlugin):
                 os.startfile(game_path)
                 delay = self.get_game_start_delay()
                 callback("info", f"等待游戏启动 ({delay} 秒)...")
-                for i in range(delay):
-                    if self._status == PluginStatus.STOPPED:
-                        return TaskResult(self.plugin_id, "daily", PluginStatus.STOPPED,
-                                          start_time, datetime.now().isoformat(), "任务已手动停止")
-                    time.sleep(1)
-                callback("info", "游戏启动等待完成")
+                detected = self._wait_for_game_running(delay, callback)
+                if self._status == PluginStatus.STOPPED:
+                    return TaskResult(self.plugin_id, "daily", PluginStatus.STOPPED,
+                                      start_time, datetime.now().isoformat(), "任务已手动停止")
+                if detected:
+                    callback("info", "已检测到终末地正在运行")
+                else:
+                    callback("warning", "未确认终末地正在运行，后续将继续尝试触发 MaaEnd")
             except Exception as e:
                 callback("warning", f"启动游戏失败: {e}，继续尝试启动 MaaEnd...")
 
@@ -192,6 +296,10 @@ class MaaEndEndfieldPlugin(GamePlugin):
         callback("info", "正在监控 MaaEnd 任务执行...")
         completed = False
         failed = False
+        start_hotkey = self._get_start_hotkey(config_data)
+        task_started_seen = False
+        fallback_triggered = False
+        fallback_deadline = time.time() + 5
         try:
             while True:
                 if self._status == PluginStatus.STOPPED:
@@ -215,9 +323,23 @@ class MaaEndEndfieldPlugin(GamePlugin):
                 go_log_offset = new_go_offset
 
                 # Read maa.log for task progress
-                new_maa_offset, found_error = self._read_maa_log(
+                new_maa_offset, found_error, found_task_start = self._read_maa_log(
                     maa_log_path, maa_log_offset, callback)
                 maa_log_offset = new_maa_offset
+                task_started_seen = task_started_seen or found_task_start
+
+                if (
+                    not fallback_triggered
+                    and not task_started_seen
+                    and time.time() >= fallback_deadline
+                    and self._is_game_running()
+                ):
+                    if self._send_hotkey(start_hotkey):
+                        fallback_triggered = True
+                        callback("info", f"检测到终末地已运行，已补发 MaaEnd 开始热键: {start_hotkey}")
+                    else:
+                        callback("warning", f"无法发送 MaaEnd 开始热键: {start_hotkey}")
+                        fallback_triggered = True
 
                 if found_shutdown:
                     completed = True
@@ -291,19 +413,20 @@ class MaaEndEndfieldPlugin(GamePlugin):
             return offset, False
 
     def _read_maa_log(self, log_path: str, offset: int,
-                       callback: Callable[[str, str], None]) -> tuple[int, bool]:
+                       callback: Callable[[str, str], None]) -> tuple[int, bool, bool]:
         """Read maa.log for task progress.
-        Returns (new_offset, found_error).
+        Returns (new_offset, found_error, found_task_start).
         """
         found_error = False
+        found_task_start = False
 
         if not os.path.isfile(log_path):
-            return offset, False
+            return offset, False, False
 
         try:
             file_size = os.path.getsize(log_path)
             if file_size <= offset:
-                return offset, False
+                return offset, False, False
 
             with open(log_path, "r", encoding="utf-8", errors="replace") as f:
                 f.seek(offset)
@@ -325,15 +448,17 @@ class MaaEndEndfieldPlugin(GamePlugin):
                     entry = self._extract_entry(line)
                     if entry:
                         callback("warning", f"任务失败: {entry}")
+                    found_error = True
                 elif "Tasker.Task.Starting" in line:
                     entry = self._extract_entry(line)
+                    found_task_start = True
                     if entry:
                         callback("info", f"开始任务: {entry}")
 
-            return new_offset, found_error
+            return new_offset, found_error, found_task_start
 
         except Exception:
-            return offset, False
+            return offset, False, False
 
     def _extract_entry(self, line: str) -> str:
         """Extract task entry name from a log line containing JSON details."""
@@ -361,10 +486,7 @@ class MaaEndEndfieldPlugin(GamePlugin):
             if self._find_process(proc_name):
                 callback("info", f"正在关闭 {proc_name}...")
                 try:
-                    subprocess.run(
-                        ["taskkill", "/F", "/IM", proc_name],
-                        capture_output=True, timeout=10,
-                    )
+                    self._run_command(["taskkill", "/F", "/IM", proc_name], timeout=10)
                 except Exception:
                     pass
 
@@ -373,24 +495,14 @@ class MaaEndEndfieldPlugin(GamePlugin):
         # Close the game - find by window title "Endfield"
         time.sleep(2)
         try:
-            result = subprocess.run(
-                ["tasklist", "/FI", "WINDOWTITLE eq Endfield", "/FO", "CSV", "/NH"],
-                capture_output=True, text=True, timeout=5,
-            )
-            for line in result.stdout.strip().splitlines():
-                parts = line.strip('"').split('","')
-                if len(parts) >= 2 and parts[0] != "INFO:":
-                    game_proc = parts[0]
-                    callback("info", f"正在关闭终末地游戏 ({game_proc})...")
-                    try:
-                        subprocess.run(
-                            ["taskkill", "/F", "/IM", game_proc],
-                            capture_output=True, timeout=10,
-                        )
-                    except Exception:
-                        pass
-                    callback("info", "终末地游戏已关闭")
-                    break
+            game_proc = self._find_window_process("Endfield")
+            if game_proc:
+                callback("info", f"正在关闭终末地游戏 ({game_proc})...")
+                try:
+                    self._run_command(["taskkill", "/F", "/IM", game_proc], timeout=10)
+                except Exception:
+                    pass
+                callback("info", "终末地游戏已关闭")
         except Exception:
             pass
 
@@ -400,10 +512,7 @@ class MaaEndEndfieldPlugin(GamePlugin):
         for proc_name in ["MaaEnd.exe", "go-service.exe", "cpp-algo.exe"]:
             if self._find_process(proc_name):
                 try:
-                    subprocess.run(
-                        ["taskkill", "/F", "/IM", proc_name],
-                        capture_output=True, timeout=5,
-                    )
+                    self._run_command(["taskkill", "/F", "/IM", proc_name], timeout=5)
                 except Exception:
                     pass
 

@@ -1,6 +1,8 @@
 import sys
 import os
 import logging
+import ctypes
+import subprocess
 
 # Ensure the project root is on sys.path
 sys.path.insert(0, os.path.dirname(__file__))
@@ -31,6 +33,38 @@ logging.basicConfig(
     ],
 )
 logger = logging.getLogger("AutoGamePlay")
+
+
+def _is_admin() -> bool:
+    if os.name != "nt":
+        return True
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:
+        return False
+
+
+def _ensure_admin() -> bool:
+    """Relaunch the app elevated on Windows so MaaEnd can run without per-action UAC."""
+    if os.name != "nt" or _is_admin():
+        return True
+
+    if getattr(sys, "frozen", False):
+        executable = sys.executable
+        params = subprocess.list2cmdline(sys.argv[1:])
+    else:
+        executable = sys.executable
+        params = subprocess.list2cmdline([os.path.abspath(__file__), *sys.argv[1:]])
+
+    ret = ctypes.windll.shell32.ShellExecuteW(None, "runas", executable, params, None, 1)
+    if ret <= 32:
+        ctypes.windll.user32.MessageBoxW(
+            None,
+            "AutoGamePlay 需要管理员权限才能稳定控制 MaaEnd。请允许 UAC 提权后重新打开。",
+            "AutoGamePlay",
+            0x10,
+        )
+    return False
 
 
 def setup_theme(config: ConfigManager):
@@ -125,4 +159,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if _ensure_admin():
+        main()

@@ -15,6 +15,7 @@ from plugins.base import PluginStatus
 from core.plugin_manager import PluginManager
 from core.task_runner import TaskRunner, SequentialRunner
 from core.scheduler import Scheduler
+from ui.design_system import apply_button_style, apply_card_style
 
 
 class GameStatusCard(CardWidget):
@@ -24,6 +25,7 @@ class GameStatusCard(CardWidget):
         super().__init__(parent)
         self.plugin_id = plugin_id
         self.setFixedHeight(140)
+        apply_card_style(self, accent=True)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 16, 20, 16)
@@ -100,11 +102,13 @@ class DashboardPage(QWidget):
 
         self.run_all_btn = PrimaryPushButton(FluentIcon.PLAY, "一键全部运行")
         self.run_all_btn.clicked.connect(self._on_run_all)
+        apply_button_style(self.run_all_btn, prominent=True)
         title_layout.addWidget(self.run_all_btn)
 
         self.stop_all_btn = PushButton(FluentIcon.CLOSE, "全部停止")
         self.stop_all_btn.clicked.connect(self._on_stop_all)
         self.stop_all_btn.setEnabled(False)
+        apply_button_style(self.stop_all_btn, prominent=True)
         title_layout.addWidget(self.stop_all_btn)
 
         layout.addLayout(title_layout)

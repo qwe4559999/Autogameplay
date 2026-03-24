@@ -1,4 +1,5 @@
 import ctypes
+from ctypes import wintypes
 import json
 import os
 import subprocess
@@ -166,7 +167,70 @@ class MaaEndEndfieldPlugin(GamePlugin):
                 return hotkey.strip().upper()
         return "F10"
 
-    def _send_hotkey(self, hotkey: str) -> bool:
+    def _find_window_by_pid(self, pid: int) -> Optional[int]:
+        user32 = ctypes.windll.user32
+        found_hwnd = None
+
+        @ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
+        def enum_windows_proc(hwnd, _lparam):
+            nonlocal found_hwnd
+            if not user32.IsWindowVisible(hwnd):
+                return True
+
+            process_id = wintypes.DWORD()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(process_id))
+            if process_id.value != pid:
+                return True
+
+            if user32.GetWindow(hwnd, 4):  # GW_OWNER
+                return True
+
+            length = user32.GetWindowTextLengthW(hwnd)
+            if length <= 0:
+                return True
+
+            found_hwnd = hwnd
+            return False
+
+        user32.EnumWindows(enum_windows_proc, 0)
+        return found_hwnd
+
+    def _activate_window(self, hwnd: int) -> bool:
+        if not hwnd:
+            return False
+
+        user32 = ctypes.windll.user32
+        current_thread = user32.GetCurrentThreadId()
+        foreground = user32.GetForegroundWindow()
+        foreground_thread = user32.GetWindowThreadProcessId(foreground, None) if foreground else 0
+        target_thread = user32.GetWindowThreadProcessId(hwnd, None)
+
+        attached_foreground = False
+        attached_target = False
+
+        try:
+            if foreground_thread and foreground_thread != current_thread:
+                attached_foreground = bool(
+                    user32.AttachThreadInput(foreground_thread, current_thread, True)
+                )
+            if target_thread and target_thread != current_thread and target_thread != foreground_thread:
+                attached_target = bool(
+                    user32.AttachThreadInput(target_thread, current_thread, True)
+                )
+
+            user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+            user32.BringWindowToTop(hwnd)
+            user32.SetForegroundWindow(hwnd)
+            user32.SetFocus(hwnd)
+            time.sleep(0.2)
+            return user32.GetForegroundWindow() == hwnd
+        finally:
+            if attached_target:
+                user32.AttachThreadInput(target_thread, current_thread, False)
+            if attached_foreground:
+                user32.AttachThreadInput(foreground_thread, current_thread, False)
+
+    def _send_hotkey(self, hotkey: str, process_id: Optional[int] = None) -> bool:
         vk_map = {
             "CTRL": 0x11,
             "SHIFT": 0x10,
@@ -187,6 +251,11 @@ class MaaEndEndfieldPlugin(GamePlugin):
             return False
 
         user32 = ctypes.windll.user32
+        if process_id:
+            hwnd = self._find_window_by_pid(process_id)
+            if hwnd and not self._activate_window(hwnd):
+                return False
+
         for modifier in modifiers:
             mod_vk = vk_map.get(modifier)
             if mod_vk is None:
@@ -349,11 +418,11 @@ class MaaEndEndfieldPlugin(GamePlugin):
                             )
                             fallback_ready_logged = True
                     elif self._is_game_running():
-                        if self._send_hotkey(start_hotkey):
+                        if self._send_hotkey(start_hotkey, maaend_pid):
                             fallback_triggered = True
                             callback("info", f"已在安全窗口后补发 MaaEnd 开始热键: {start_hotkey}")
                         else:
-                            callback("warning", f"尝试补发 MaaEnd 开始热键失败: {start_hotkey}")
+                            callback("warning", f"尝试补发 MaaEnd 开始热键失败，可能是窗口未能切到前台: {start_hotkey}")
                             fallback_triggered = True
                     elif fallback_ready_logged:
                         callback("info", "已到兜底窗口，但仍未确认终末地处于运行中，继续等待")

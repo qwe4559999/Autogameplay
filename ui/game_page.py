@@ -18,6 +18,7 @@ from qfluentwidgets import (
 from plugins.base import GamePlugin, PluginStatus, TaskResult
 from core.task_runner import TaskRunner
 from core.config_manager import ConfigManager
+from ui.design_system import apply_button_style, apply_card_style, apply_log_style
 
 
 class GamePage(QWidget):
@@ -91,13 +92,7 @@ class GamePage(QWidget):
 
         hero_card = CardWidget()
         hero_card.setObjectName("maaendHeroCard")
-        hero_card.setStyleSheet(
-            "#maaendHeroCard {"
-            "background:qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #f2fbff, stop:0.55 #f7fbf6, stop:1 #eef7ff);"
-            "border:1px solid rgba(15, 120, 140, 0.14);"
-            "border-radius:20px;"
-            "}"
-        )
+        apply_card_style(hero_card, accent=True)
         hero_layout = QVBoxLayout(hero_card)
         hero_layout.setContentsMargins(24, 20, 24, 20)
         hero_layout.setSpacing(10)
@@ -127,13 +122,7 @@ class GamePage(QWidget):
 
         summary_card = CardWidget()
         summary_card.setObjectName("maaendSummaryCard")
-        summary_card.setStyleSheet(
-            "#maaendSummaryCard {"
-            "background: rgba(255, 255, 255, 0.92);"
-            "border:1px solid rgba(120, 140, 160, 0.14);"
-            "border-radius:18px;"
-            "}"
-        )
+        apply_card_style(summary_card)
         summary_layout = QVBoxLayout(summary_card)
         summary_layout.setContentsMargins(18, 16, 18, 16)
         summary_layout.setSpacing(10)
@@ -158,13 +147,7 @@ class GamePage(QWidget):
 
         config_card = CardWidget()
         config_card.setObjectName("maaendConfigCard")
-        config_card.setStyleSheet(
-            "#maaendConfigCard {"
-            "background: rgba(248, 251, 252, 0.96);"
-            "border:1px solid rgba(140, 150, 165, 0.16);"
-            "border-radius:18px;"
-            "}"
-        )
+        apply_card_style(config_card)
         config_layout = QVBoxLayout(config_card)
         config_layout.setContentsMargins(18, 16, 18, 16)
         config_layout.setSpacing(12)
@@ -230,13 +213,7 @@ class GamePage(QWidget):
 
         guide_card = CardWidget()
         guide_card.setObjectName("maaendGuideCard")
-        guide_card.setStyleSheet(
-            "#maaendGuideCard {"
-            "background: rgba(245, 248, 250, 0.96);"
-            "border:1px solid rgba(140, 150, 165, 0.14);"
-            "border-radius:18px;"
-            "}"
-        )
+        apply_card_style(guide_card)
         guide_layout = QVBoxLayout(guide_card)
         guide_layout.setContentsMargins(18, 16, 18, 16)
         guide_layout.setSpacing(8)
@@ -256,13 +233,7 @@ class GamePage(QWidget):
 
         action_card = CardWidget()
         action_card.setObjectName("maaendActionCard")
-        action_card.setStyleSheet(
-            "#maaendActionCard {"
-            "background: rgba(255, 255, 255, 0.96);"
-            "border:1px solid rgba(120, 140, 160, 0.14);"
-            "border-radius:18px;"
-            "}"
-        )
+        apply_card_style(action_card)
         action_layout = QVBoxLayout(action_card)
         action_layout.setContentsMargins(18, 16, 18, 16)
         action_layout.setSpacing(10)
@@ -276,18 +247,18 @@ class GamePage(QWidget):
 
         self.run_btn = PrimaryPushButton(FluentIcon.PLAY, "立即运行")
         self.run_btn.clicked.connect(self._on_run)
-        self.run_btn.setMinimumHeight(44)
+        apply_button_style(self.run_btn, prominent=True)
         btn_layout.addWidget(self.run_btn)
 
         self.stop_btn = PushButton(FluentIcon.CLOSE, "停止")
         self.stop_btn.clicked.connect(self._on_stop)
         self.stop_btn.setEnabled(False)
-        self.stop_btn.setMinimumHeight(44)
+        apply_button_style(self.stop_btn, prominent=True)
         btn_layout.addWidget(self.stop_btn)
 
         self.open_tool_btn = PushButton(FluentIcon.SETTING, "打开工具配置")
         self.open_tool_btn.clicked.connect(self._on_open_tool)
-        self.open_tool_btn.setMinimumHeight(44)
+        apply_button_style(self.open_tool_btn, prominent=True)
         btn_layout.addWidget(self.open_tool_btn)
 
         btn_layout.addStretch()
@@ -296,13 +267,7 @@ class GamePage(QWidget):
 
         log_card = CardWidget()
         log_card.setObjectName("maaendLogCard")
-        log_card.setStyleSheet(
-            "#maaendLogCard {"
-            "background: rgba(255, 255, 255, 0.98);"
-            "border:1px solid rgba(120, 140, 160, 0.14);"
-            "border-radius:18px;"
-            "}"
-        )
+        apply_card_style(log_card)
         log_layout = QVBoxLayout(log_card)
         log_layout.setContentsMargins(18, 16, 18, 16)
         log_layout.setSpacing(8)
@@ -322,14 +287,7 @@ class GamePage(QWidget):
         self.log_text.setReadOnly(True)
         self.log_text.setPlaceholderText("任务运行后，日志会在这里滚动显示。")
         self.log_text.setMinimumHeight(280)
-        self.log_text.setStyleSheet(
-            "background: #fbfcfd;"
-            "border: 1px solid rgba(120, 140, 160, 0.18);"
-            "border-radius: 14px;"
-            "font-family: 'Cascadia Code', 'Consolas', monospace;"
-            "font-size: 12px;"
-            "padding: 8px;"
-        )
+        apply_log_style(self.log_text)
         log_layout.addWidget(self.log_text)
 
         content_layout.addWidget(log_card)
@@ -340,7 +298,6 @@ class GamePage(QWidget):
     def _apply_maaend_page_style(self):
         self.setStyleSheet(
             "QLabel { color: #1f2933; }"
-            "CardWidget { border: none; }"
         )
 
     def _make_badge(self, text: str, background: str, color: str) -> QLabel:
@@ -406,6 +363,7 @@ class GamePage(QWidget):
     def _add_standard_game_controls(self, layout: QVBoxLayout):
         # Info card
         info_card = CardWidget()
+        apply_card_style(info_card)
         info_layout = QVBoxLayout(info_card)
         info_layout.setContentsMargins(16, 12, 16, 12)
 
@@ -422,15 +380,18 @@ class GamePage(QWidget):
 
         self.run_btn = PrimaryPushButton(FluentIcon.PLAY, "立即运行")
         self.run_btn.clicked.connect(self._on_run)
+        apply_button_style(self.run_btn, prominent=True)
         btn_layout.addWidget(self.run_btn)
 
         self.stop_btn = PushButton(FluentIcon.CLOSE, "停止")
         self.stop_btn.clicked.connect(self._on_stop)
         self.stop_btn.setEnabled(False)
+        apply_button_style(self.stop_btn, prominent=True)
         btn_layout.addWidget(self.stop_btn)
 
         self.open_tool_btn = PushButton(FluentIcon.SETTING, "打开工具配置")
         self.open_tool_btn.clicked.connect(self._on_open_tool)
+        apply_button_style(self.open_tool_btn, prominent=True)
         btn_layout.addWidget(self.open_tool_btn)
 
         btn_layout.addStretch()
@@ -442,9 +403,7 @@ class GamePage(QWidget):
 
         self.log_text = TextEdit()
         self.log_text.setReadOnly(True)
-        self.log_text.setStyleSheet(
-            "font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 12px;"
-        )
+        apply_log_style(self.log_text)
         layout.addWidget(self.log_text, 1)
 
     def _refresh_maaend_summary(self):

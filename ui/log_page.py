@@ -6,6 +6,7 @@ from PyQt6.QtCore import Qt
 from qfluentwidgets import (
     PushButton, FluentIcon, SubtitleLabel, TextEdit, ComboBox, BodyLabel,
 )
+from ui.design_system import apply_button_style, apply_log_style
 
 
 class LogPage(QWidget):
@@ -33,6 +34,7 @@ class LogPage(QWidget):
 
         clear_btn = PushButton(FluentIcon.DELETE, "清空")
         clear_btn.clicked.connect(self._on_clear)
+        apply_button_style(clear_btn)
         title_layout.addWidget(clear_btn)
 
         layout.addLayout(title_layout)
@@ -40,9 +42,7 @@ class LogPage(QWidget):
         # Log text
         self.log_text = TextEdit()
         self.log_text.setReadOnly(True)
-        self.log_text.setStyleSheet(
-            "font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 12px;"
-        )
+        apply_log_style(self.log_text)
         layout.addWidget(self.log_text, 1)
 
     def add_plugin_filter(self, plugin_id: str, display_name: str):

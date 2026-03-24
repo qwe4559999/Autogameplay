@@ -9,6 +9,7 @@ from qfluentwidgets import (
 
 from core.config_manager import ConfigManager
 from core.plugin_manager import PluginManager
+from ui.design_system import apply_button_style, apply_card_style
 
 
 class ToolPathCard(CardWidget):
@@ -20,6 +21,7 @@ class ToolPathCard(CardWidget):
         self._tool_key = tool_key
         self._config = config
         self._plugin_manager = plugin_manager
+        apply_card_style(self)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(16, 12, 16, 12)
@@ -69,6 +71,7 @@ class SettingsPage(QWidget):
 
         # Theme
         theme_card = CardWidget()
+        apply_card_style(theme_card)
         theme_layout = QHBoxLayout(theme_card)
         theme_layout.setContentsMargins(16, 12, 16, 12)
         theme_layout.addWidget(BodyLabel("主题:"))
@@ -82,6 +85,7 @@ class SettingsPage(QWidget):
 
         # Minimize to tray
         tray_card = CardWidget()
+        apply_card_style(tray_card)
         tray_layout = QHBoxLayout(tray_card)
         tray_layout.setContentsMargins(16, 12, 16, 12)
         tray_layout.addWidget(BodyLabel("关闭时最小化到托盘:"))
@@ -106,6 +110,7 @@ class SettingsPage(QWidget):
             self._tool_cards.append(card)
 
         maaend_card = CardWidget()
+        apply_card_style(maaend_card)
         maaend_layout = QVBoxLayout(maaend_card)
         maaend_layout.setContentsMargins(16, 12, 16, 12)
         maaend_layout.setSpacing(12)
@@ -140,6 +145,7 @@ class SettingsPage(QWidget):
         btn_layout.addStretch()
         save_btn = PushButton(FluentIcon.SAVE, "保存设置")
         save_btn.clicked.connect(self._on_save)
+        apply_button_style(save_btn, prominent=True)
         btn_layout.addWidget(save_btn)
         layout.addLayout(btn_layout)
 

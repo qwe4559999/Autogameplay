@@ -15,6 +15,7 @@ from qfluentwidgets import (
 from core.models import ScheduleEntry
 from core.scheduler import Scheduler
 from core.plugin_manager import PluginManager
+from ui.design_system import apply_button_style, apply_card_style
 
 
 class ScheduleTableModel(QAbstractTableModel):
@@ -86,6 +87,7 @@ class SchedulePage(QWidget):
 
         # Add form card
         form_card = CardWidget()
+        apply_card_style(form_card)
         form_layout = QHBoxLayout(form_card)
         form_layout.setContentsMargins(16, 12, 16, 12)
         form_layout.setSpacing(12)
@@ -104,6 +106,7 @@ class SchedulePage(QWidget):
 
         self.add_btn = PrimaryPushButton(FluentIcon.ADD, "添加")
         self.add_btn.clicked.connect(self._on_add)
+        apply_button_style(self.add_btn, prominent=True)
         form_layout.addWidget(self.add_btn)
 
         layout.addWidget(form_card)
@@ -119,7 +122,7 @@ class SchedulePage(QWidget):
         ]
         for label, cron in presets:
             btn = PushButton(label)
-            btn.setFixedHeight(28)
+            apply_button_style(btn)
             btn.clicked.connect(lambda checked, c=cron: self.cron_edit.setText(c))
             preset_layout.addWidget(btn)
         preset_layout.addStretch()
@@ -145,10 +148,12 @@ class SchedulePage(QWidget):
         del_layout.addStretch()
         self.del_btn = PushButton(FluentIcon.DELETE, "删除选中")
         self.del_btn.clicked.connect(self._on_delete)
+        apply_button_style(self.del_btn)
         del_layout.addWidget(self.del_btn)
 
         self.toggle_btn = PushButton(FluentIcon.SYNC, "启用/禁用")
         self.toggle_btn.clicked.connect(self._on_toggle)
+        apply_button_style(self.toggle_btn)
         del_layout.addWidget(self.toggle_btn)
 
         layout.addLayout(del_layout)

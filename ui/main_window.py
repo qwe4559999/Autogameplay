@@ -16,6 +16,7 @@ from core.config_manager import ConfigManager
 from core.plugin_manager import PluginManager
 from core.task_runner import TaskRunner
 from core.scheduler import Scheduler
+from ui.design_system import APP_STYLESHEET
 
 
 class MainWindow(MSFluentWindow):
@@ -29,7 +30,8 @@ class MainWindow(MSFluentWindow):
         self._scheduler = scheduler
 
         self.setWindowTitle("AutoGamePlay - 多游戏日常自动化")
-        self.resize(1000, 680)
+        self.resize(1180, 760)
+        self.setStyleSheet(APP_STYLESHEET)
 
         # Center window
         screen = QApplication.primaryScreen()

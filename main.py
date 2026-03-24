@@ -13,19 +13,20 @@ from qfluentwidgets import setTheme, Theme, FluentIcon
 
 from core.config_manager import ConfigManager
 from core.plugin_manager import PluginManager
+from core.runtime_paths import ensure_runtime_layout, logs_dir
 from core.task_runner import TaskRunner
 from core.scheduler import Scheduler
 from ui.main_window import MainWindow
 
 # Configure logging
-LOG_DIR = os.path.join(os.path.dirname(__file__), "logs")
-os.makedirs(LOG_DIR, exist_ok=True)
+ensure_runtime_layout()
+LOG_DIR = logs_dir()
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
     handlers=[
-        logging.FileHandler(os.path.join(LOG_DIR, "autogameplay.log"), encoding="utf-8"),
+        logging.FileHandler(LOG_DIR / "autogameplay.log", encoding="utf-8"),
         logging.StreamHandler(),
     ],
 )

@@ -11,6 +11,8 @@ env/
 .claude/
 
 logs/
+build/
+dist/
 
 config/hub.local.backup.yaml
 

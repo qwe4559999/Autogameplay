@@ -50,6 +50,29 @@ pip install -r requirements.txt
 python main.py
 ```
 
+## 双击版构建
+
+如果你要生成给最终用户双击启动的版本：
+
+```powershell
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
+.\build_release.ps1
+```
+
+构建完成后，产物位于：
+
+```text
+dist/AutoGamePlay/AutoGamePlay.exe
+```
+
+这个版本会在首次运行时自动创建可写目录：
+
+- `data/config/`
+- `data/logs/`
+
+如果可执行目录不可写，则会回退到 `%LOCALAPPDATA%\AutoGamePlay\`。
+
 ## 配置
 
 首次使用时需要在应用的“设置”页面配置各工具安装路径。

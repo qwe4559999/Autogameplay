@@ -3,14 +3,16 @@ import yaml
 from typing import Any
 
 from core.models import ScheduleEntry
+from core.runtime_paths import config_dir, ensure_runtime_layout
 
-CONFIG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config")
+CONFIG_DIR = str(config_dir())
 
 
 class ConfigManager:
     """Manages YAML configuration files."""
 
     def __init__(self, config_dir: str = CONFIG_DIR):
+        ensure_runtime_layout()
         self._config_dir = config_dir
         self._hub_config: dict = {}
         self._schedules: list[ScheduleEntry] = []

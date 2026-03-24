@@ -1,0 +1,15 @@
+theme: auto
+minimize_to_tray: true
+language: zh_CN
+tools:
+  maa:
+    install_path: ''
+    executable: MAA.exe
+  maaend:
+    install_path: ''
+    executable: MaaEnd.exe
+    game_path: ''
+    game_start_delay: 30
+  okww:
+    install_path: ''
+    executable: ok-ww.exe

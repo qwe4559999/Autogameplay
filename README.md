@@ -56,11 +56,11 @@ python main.py
 
 仓库提供了示例配置文件：
 
-- [`config/hub.example.yaml`](/D:/document/autogameplay/config/hub.example.yaml)
+- [`config/hub.example.yaml`](config/hub.example.yaml)
 
 当前默认配置文件是：
 
-- [`config/hub.yaml`](/D:/document/autogameplay/config/hub.yaml)
+- [`config/hub.yaml`](config/hub.yaml)
 
 MaaEnd 额外支持：
 
@@ -78,7 +78,7 @@ MaaEnd 额外支持：
 
 详细开发过程、架构说明和当前待办见：
 
-- [`DEVELOPMENT_HANDOFF.md`](/D:/document/autogameplay/DEVELOPMENT_HANDOFF.md)
+- [`DEVELOPMENT_HANDOFF.md`](DEVELOPMENT_HANDOFF.md)
 
 ## License
 

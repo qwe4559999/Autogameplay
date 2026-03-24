@@ -201,6 +201,11 @@ class MaaEndEndfieldPlugin(GamePlugin):
             user32.keybd_event(mod_vk, 0, 0x0002, 0)
         return True
 
+    def _get_fallback_hotkey_deadline(self, game_launch_started_at: Optional[float]) -> float:
+        """Fallback hotkey should not fire before the game has had time to appear."""
+        base = game_launch_started_at if game_launch_started_at is not None else time.monotonic()
+        return base + 60.0
+
     def run_tasks(self, task_ids: list[str], callback: Callable[[str, str], None]) -> TaskResult:
         start_time = datetime.now().isoformat()
         self._status = PluginStatus.RUNNING
@@ -214,15 +219,17 @@ class MaaEndEndfieldPlugin(GamePlugin):
         install_path = self.get_install_path()
         exe_name = self.get_executable() or "MaaEnd.exe"
         exe_path = os.path.join(install_path, exe_name)
+        game_launch_started_at: Optional[float] = None
 
         # Step 1: Optionally launch the game
         game_path = self.get_game_path()
         if game_path and os.path.exists(game_path):
             callback("info", f"启动终末地游戏: {game_path}")
             try:
+                game_launch_started_at = time.monotonic()
                 os.startfile(game_path)
                 delay = self.get_game_start_delay()
-                callback("info", f"等待游戏启动 ({delay} 秒)...")
+                callback("info", f"等待游戏启动 ({delay} 秒)，热键兜底将至少延后 60 秒...")
                 detected = self._wait_for_game_running(delay, callback)
                 if self._status == PluginStatus.STOPPED:
                     return TaskResult(self.plugin_id, "daily", PluginStatus.STOPPED,
@@ -233,6 +240,8 @@ class MaaEndEndfieldPlugin(GamePlugin):
                     callback("warning", "未确认终末地正在运行，后续将继续尝试触发 MaaEnd")
             except Exception as e:
                 callback("warning", f"启动游戏失败: {e}，继续尝试启动 MaaEnd...")
+        else:
+            callback("info", "未配置可启动的游戏路径，将仅依赖终末地运行状态和 MaaEnd 日志监控")
 
         # Step 2: Inject autoRunOnLaunch=true
         callback("info", "正在配置 MaaEnd 自动运行...")
@@ -299,7 +308,9 @@ class MaaEndEndfieldPlugin(GamePlugin):
         start_hotkey = self._get_start_hotkey(config_data)
         task_started_seen = False
         fallback_triggered = False
-        fallback_deadline = time.time() + 5
+        fallback_deadline = self._get_fallback_hotkey_deadline(game_launch_started_at)
+        fallback_ready_logged = False
+        callback("info", "开始任务兜底已安排: 游戏启动后至少等待 60 秒再允许补发开始热键")
         try:
             while True:
                 if self._status == PluginStatus.STOPPED:
@@ -328,18 +339,25 @@ class MaaEndEndfieldPlugin(GamePlugin):
                 maa_log_offset = new_maa_offset
                 task_started_seen = task_started_seen or found_task_start
 
-                if (
-                    not fallback_triggered
-                    and not task_started_seen
-                    and time.time() >= fallback_deadline
-                    and self._is_game_running()
-                ):
-                    if self._send_hotkey(start_hotkey):
-                        fallback_triggered = True
-                        callback("info", f"检测到终末地已运行，已补发 MaaEnd 开始热键: {start_hotkey}")
-                    else:
-                        callback("warning", f"无法发送 MaaEnd 开始热键: {start_hotkey}")
-                        fallback_triggered = True
+                if not fallback_triggered and not task_started_seen:
+                    if time.monotonic() < fallback_deadline:
+                        if not fallback_ready_logged:
+                            remaining = max(1, int(fallback_deadline - time.monotonic()))
+                            callback(
+                                "info",
+                                f"仍在等待终末地稳定加载，{remaining} 秒后才会允许补发开始热键",
+                            )
+                            fallback_ready_logged = True
+                    elif self._is_game_running():
+                        if self._send_hotkey(start_hotkey):
+                            fallback_triggered = True
+                            callback("info", f"已在安全窗口后补发 MaaEnd 开始热键: {start_hotkey}")
+                        else:
+                            callback("warning", f"尝试补发 MaaEnd 开始热键失败: {start_hotkey}")
+                            fallback_triggered = True
+                    elif fallback_ready_logged:
+                        callback("info", "已到兜底窗口，但仍未确认终末地处于运行中，继续等待")
+                        fallback_ready_logged = False
 
                 if found_shutdown:
                     completed = True
